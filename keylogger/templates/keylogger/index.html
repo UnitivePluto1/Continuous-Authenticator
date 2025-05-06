@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keystroke Logger</title>
+    <script>
+        let keyPressTimes = {};  // Store press times for hold time calculation
+        let lastReleaseTime = null;  // For flight time
+        let lastPressTime = null;    // For down-down time
+    
+        document.addEventListener("keydown", function(event) {
+            if (!keyPressTimes[event.key]) {
+                let pressTime = Date.now() / 1000;  // Epoch in seconds
+                keyPressTimes[event.key] = pressTime;
+    
+                let dd_time = lastPressTime !== null ? (pressTime - lastPressTime) : null;
+                let flight_time = lastReleaseTime !== null ? (pressTime - lastReleaseTime) : null;
+    
+                sendKeystroke(event.key, "press", dd_time, flight_time, null);
+    
+                lastPressTime = pressTime;  // update for next dd_time
+            }
+        });
+    
+        document.addEventListener("keyup", function(event) {
+            let releaseTime = Date.now() / 1000;
+            let pressTime = keyPressTimes[event.key] || null;
+            let holdTime = pressTime !== null ? (releaseTime - pressTime) : null;
+    
+            sendKeystroke(event.key, "release", null, null, holdTime);
+    
+            lastReleaseTime = releaseTime;
+            delete keyPressTimes[event.key];
+        });
+    
+        function sendKeystroke(key, eventType, dd_time = null, flight_time = null, hold_time = null) {
+            let data = {
+                key: key,
+                event_type: eventType
+            };
+    
+            if (eventType === "press") {
+                data.dd_time = dd_time;
+                data.flight_time = flight_time;
+                console.log(`Press: Key=${key}, DD=${dd_time}, FT=${flight_time}`);
+            } else if (eventType === "release") {
+                data.hold_time = hold_time;
+                console.log(`Release: Key=${key}, HT=${hold_time}`);
+            }
+    
+            fetch('/keylogger/log/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(responseData => console.log("Server Response:", responseData))
+            .catch(error => console.error("Error sending keystroke data:", error));
+        }
+    
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+    
+    
+</head>
+<body>
+    <h1>Keystroke Authentication Test</h1>
+    <input type="text" id="inputBox" placeholder="Type here..." style="width: 100%; padding: 8px; margin-top: 10px; font-size: 16px;">
+</body>
+</html>
